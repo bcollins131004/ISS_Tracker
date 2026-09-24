@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISS Live Tracker</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛰️</text></svg>">
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+</head>
+<body>
+
+    <h1>🛰 ISS Live Tracker</h1>
+
+    <div id="map"></div>
+
+    <div id="info">
+        Loading ISS data...
+    </div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+    <script>
+    window.onload = function () {
+
+        const map = L.map('map').setView([0, 0], 2);
+
+        L.tileLayer(
+            'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+            {
+                attribution: '&copy; OpenStreetMap contributors',
+                maxZoom: 18
+            }
+        ).addTo(map);
+
+        const issIcon = L.divIcon({
+            html: '🛰️',
+            className: 'iss-icon',
+            iconSize: [32, 32]
+        });
+
+        const marker = L.marker([0, 0], { icon: issIcon }).addTo(map);
+        const trail = L.polyline([], { color: '#00b7ff', weight: 2 }).addTo(map);
+        const trailPoints = [];
+        const MAX_TRAIL_POINTS = 200;
+
+        let firstUpdate = true;
+
+        async function updateISS() {
+            try {
+                const response = await fetch('/iss');
+                const data = await response.json();
+
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                const lat = parseFloat(data.latitude);
+                const lon = parseFloat(data.longitude);
+
+                marker.setLatLng([lat, lon]);
+
+                trailPoints.push([lat, lon]);
+                if (trailPoints.length > MAX_TRAIL_POINTS) {
+                    trailPoints.shift();
+                }
+                trail.setLatLngs(trailPoints);
+
+                if (firstUpdate) {
+                    map.setView([lat, lon], 3);
+                    firstUpdate = false;
+                }
+
+                document.getElementById('info').innerHTML =
+                    `Latitude: ${lat.toFixed(4)}<br>
+                     Longitude: ${lon.toFixed(4)}<br>
+                     Altitude: ${data.altitude.toFixed(2)} km<br>
+                     Velocity: ${data.velocity.toFixed(2)} km/h`;
+            }
+            catch (error) {
+                console.error(error);
+                document.getElementById('info').innerHTML = 'Failed to load ISS data';
+            }
+        }
+
+        updateISS();
+        setInterval(updateISS, 5000);
+    };
+    </script>
+
+    <style>
+        .iss-icon {
+            font-size: 28px;
+            text-align: center;
+            line-height: 32px;
+        }
+    </style>
+
+</body>
+</html>
